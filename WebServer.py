@@ -129,30 +129,41 @@ def run():
         # New socket created on return
         connectionSocket, client_addr = serverSocket.accept()
 
-        # Read from socket (but not address as in UDP)
-        data = connectionSocket.recv(1024).decode()
+  
+        #implement a timer
+        start_time = time.time()
+        #sleep function used to artificially create the request timeout
+        #time.sleep(7)
+        time_recv = time.time() - start_time 
+        if (time_recv < 5):
+            # Read from socket (but not address as in UDP)
+            data = connectionSocket.recv(1024).decode()
+            
+            # data, response_status = receive_chunks(connectionSocket) # todo: add 404 feature function
+            print("\n----data", data, "\n------------------------------\n")
 
-        # data, response_status = receive_chunks(connectionSocket) # todo: add 404 feature function
-        print("\n----data", data, "\n------------------------------\n")
+            request = normalize_line_endings(data)
+            request_head, request_body = request.split('\n\n', 1)
 
-        request = normalize_line_endings(data)
-        request_head, request_body = request.split('\n\n', 1)
+            print("\n----request_head:", request_head, "\n------------------------------\n")
+            print("\n----request_body", request_body, "\n------------------------------\n")
 
-        print("\n----request_head:", request_head, "\n------------------------------\n")
-        print("\n----request_body", request_body, "\n------------------------------\n")
+            # first line is request headline, and others are headers # todo: clean this part up
+            request_head = request_head.splitlines()
+            request_headline = request_head[0]
 
-        # first line is request headline, and others are headers # todo: clean this part up
-        request_head = request_head.splitlines()
-        request_headline = request_head[0]
+            request_headers = dict(x.split(': ', 1) for x in request_head[1:])
 
-        request_headers = dict(x.split(': ', 1) for x in request_head[1:])
+            # headline has form of "METHOD URI HTTP/1.0"
+            request_method, request_uri, request_proto = request_headline.split(' ', 3)
 
-        # headline has form of "METHOD URI HTTP/1.0"
-        request_method, request_uri, request_proto = request_headline.split(' ', 3)
+            print("filename", request_uri)
 
-        print("filename", request_uri)
-
-        response_body, response_status = fetch_file(request_uri[1:])
+            response_body, response_status = fetch_file(request_uri[1:])
+        else:
+            response_status = '404'
+            response_html = ['<html><body><h1>Error 408</h1>', '<p>Request Timeout</p>', '</body></html>']
+            response_body = ''.join(response_html)
 
         # build response status
         response_status_line = f'HTTP/1.1 {response_status} {response_status_text[response_status]}'
