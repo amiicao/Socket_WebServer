@@ -2,7 +2,6 @@
 import shutil
 from socket import *
 
-CACHE_SEPARATOR = "<CACHE_SEPARATOR>"
 
 response_status_text = {
     '200': 'OK',
@@ -17,13 +16,10 @@ def send_file_to_proxy(filename, client_socket):
     try:
         with open(f'server_files/{filename}', "rb") as f:
             while True:
-                # read the bytes from the file
                 bytes_read = f.read(1024)
                 if not bytes_read:
-                    # file transmitting is done
                     break
-                # we use sendall to assure transimission in
-                # busy networks
+
                 client_socket.sendall(bytes_read)
 
         response_body = ''
@@ -107,30 +103,6 @@ def normalize_line_endings(s):
     return ''.join((line + '\n') for line in s.splitlines())
 
 
-# def receive_chunks(sock):
-#     has_timed_out = False
-#     try:  # timeout will throw error, so we wrap code in a try/catch block
-#         socket.settimeout(10)
-#         chunks = []
-#         ongoing = True
-#         while ongoing:
-#             data = sock.recv(1024)
-#             print("data", data.decode())
-#             if not data:
-#                 ongoing = False
-#                 continue
-#             chunks.append(data)
-#             print("chunks:", chunks)
-#         socket.settimeout(None)
-#         total_chunks = ''.join(chunks)
-#         print("total_chunks", total_chunks)
-#         return total_chunks, has_timed_out
-#     except:
-#         print("timed out")
-#         has_timed_out = True
-#     return "", has_timed_out
-
-
 def run():
     serverPort = 80  # HTTP services are usually on port 80
     # http://127.0.0.1:80/test.html copy and paste this into the browser to send request to server
@@ -156,7 +128,6 @@ def run():
         # Read from socket (but not address as in UDP)
         data = connectionSocket.recv(1024).decode()
 
-        # data, response_status = receive_chunks(connectionSocket) # todo: add 404 feature function
         print("\n----data", data, "\n------------------------------\n")
 
         request = normalize_line_endings(data)
