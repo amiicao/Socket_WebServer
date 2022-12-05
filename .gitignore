@@ -130,3 +130,7 @@ dmypy.json
 
 
 .idea/
+
+# cached files
+cache_files/
+proxy_cache/

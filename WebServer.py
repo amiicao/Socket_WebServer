@@ -1,7 +1,7 @@
 # Include Python's Socket Library
 import shutil
-from socket import *
 import time
+from socket import *
 
 response_status_text = {
     '200': 'OK',
@@ -12,17 +12,36 @@ response_status_text = {
 }
 
 
+def send_file_to_proxy(filename, client_socket):
+    try:
+        with open(f'server_files/{filename}', "rb") as f:
+            while True:
+                bytes_read = f.read(1024)
+                if not bytes_read:
+                    break
+
+                client_socket.sendall(bytes_read)
+
+        response_body = ''
+        status_code = '200'
+    except:
+        response_html = ['<html><body><h1>Error 404</h1>', '<p>Not Found</p>', '</body></html>']
+        response_body = ''.join(response_html)
+        status_code = '404'
+    return response_body, status_code
+
+
 def fetch_file(filename):
     print("client requested filename", filename)
 
     try:
-        #look for unsafe characters, status code 400
-        if "{" in filename or "}" in filename or"["in filename or"]"in filename or "%" in filename or "|" in filename or "^" in filename or "`"  in filename or "~" in filename or "//" in filename:
+        # look for unsafe characters, status code 400
+        if "{" in filename or "}" in filename or "[" in filename or "]" in filename or "%" in filename or "|" in filename or "^" in filename or "`" in filename or "~" in filename or "//" in filename:
             status_code = '400'
             response_html = ['<html><body><h1>Error 400</h1>', '<p>Bad Request</p>', '</body></html>']
             response_body = ''.join(response_html)
             return response_body, status_code
-        
+
         cache_f = open(f'cache_files/{filename}', 'r')
         cache_file_lines = cache_f.readlines()
         cache_f.close()
@@ -106,12 +125,11 @@ def run():
         # New socket created on return
         connectionSocket, client_addr = serverSocket.accept()
 
-  
-        #implement a timer
+        # implement a timer
         start_time = time.time()
-        #sleep function used to artificially create the request timeout
-        #time.sleep(7)
-        time_recv = time.time() - start_time 
+        # sleep function used to artificially create the request timeout
+        # time.sleep(7)
+        time_recv = time.time() - start_time
         if (time_recv < 5):
             # Read from socket (but not address as in UDP)
             data = connectionSocket.recv(1024).decode()
@@ -131,32 +149,58 @@ def run():
             # headline has form of "GET URI HTTP/1.0"
             request_method, request_uri, request_proto = request_headline.split(' ', 3)
 
-            print("filename", request_uri)
+            if len(request_uri) > 15 and request_uri[:15] == '/proxy-request-':
+                filename = request_uri[15:]
+                print(f"proxy server is requesting filename {filename}")
+                response_body, response_status = send_file_to_proxy(filename, connectionSocket)
 
-            response_body, response_status = fetch_file(request_uri[1:])
-        else:
+            else:
+                print("this request is from web browser to server")
+                print("filename", request_uri)
+                response_body, response_status = fetch_file(request_uri[1:])
+
+                # build response status
+                response_status_line = f'HTTP/1.1 {response_status} {response_status_text[response_status]}'
+
+                # build response headers
+                response_headers = {
+                    'Content-Type': 'text/html; encoding=utf8',
+                    'Content-Length': len(response_body),
+                    'Connection': 'close',
+                }
+                response_headers_raw = ''.join('%s: %s\n' % (k, v) for k, v in \
+                                               iter(response_headers.items()))
+
+                # sending full response
+                connectionSocket.send(response_status_line.encode())
+                connectionSocket.send(response_headers_raw.encode())
+                connectionSocket.send('\n'.encode())  # to separate headers from body
+                connectionSocket.send(response_body.encode())
+
+        else:  # timeout; status code 408
             response_status = '404'
             response_html = ['<html><body><h1>Error 408</h1>', '<p>Request Timeout</p>', '</body></html>']
             response_body = ''.join(response_html)
 
-        # build response status
-        response_status_line = f'HTTP/1.1 {response_status} {response_status_text[response_status]}'
+            # build response status
+            response_status_line = f'HTTP/1.1 {response_status} {response_status_text[response_status]}'
 
-        # build response headers
-        response_headers = {
-            'Content-Type': 'text/html; encoding=utf8',
-            'Content-Length': len(response_body),
-            'Connection': 'close',
-        }
-        response_headers_raw = ''.join('%s: %s\n' % (k, v) for k, v in \
-                                       iter(response_headers.items()))
+            # build response headers
+            response_headers = {
+                'Content-Type': 'text/html; encoding=utf8',
+                'Content-Length': len(response_body),
+                'Connection': 'close',
+            }
+            response_headers_raw = ''.join('%s: %s\n' % (k, v) for k, v in \
+                                           iter(response_headers.items()))
 
-        # sending full response
-        connectionSocket.send(response_status_line.encode())
-        connectionSocket.send(response_headers_raw.encode())
-        connectionSocket.send('\n'.encode())  # to separate headers from body
-        connectionSocket.send(response_body.encode())
+            # sending full response
+            connectionSocket.send(response_status_line.encode())
+            connectionSocket.send(response_headers_raw.encode())
+            connectionSocket.send('\n'.encode())  # to separate headers from body
+            connectionSocket.send(response_body.encode())
 
+        print(response_body)
         # Close connection to client (but not welcoming socket)
         connectionSocket.close()
 
