@@ -9,9 +9,6 @@ ProxyServerPort = 12000
 MainServerHost = '127.0.0.1'  # todo: replace with my computer's ip address after
 MainServerPort = 80
 
-CACHE_SEPARATOR = "<CACHE_SEPARATOR>"
-
-
 response_status_text = {
     '200': 'OK',
     '304': 'Not Modified',
@@ -92,13 +89,9 @@ def fetch_file_from_server(filename):
 
     with open(f'proxy_cache/{filename}', "wb") as f:
         while True:
-            # read 1024 bytes from the socket (receive)
             bytes_read = clientSocket.recv(1024)
             if not bytes_read:
-                # nothing is received
-                # file transmitting is done
                 break
-            # write to the file the bytes we just received
             f.write(bytes_read)
 
     clientSocket.close()
@@ -125,7 +118,6 @@ def run():
         # Read from socket (but not address as in UDP)
         data = connectionSocket.recv(1024).decode()
 
-        # data, response_status = receive_chunks(connectionSocket) # todo: add 404 feature function
         print("\n----data", data, "\n------------------------------\n")
 
         request = normalize_line_endings(data)
@@ -134,13 +126,11 @@ def run():
         print("\n----request_head:", request_head, "\n------------------------------\n")
         # print("\n----request_body", request_body, "\n------------------------------\n")
 
-        # first line is request headline, and others are headers # todo: clean this part up
+        # first line is request headline, and others are headers
         request_head = request_head.splitlines()
         request_headline = request_head[0]
 
-        request_headers = dict(x.split(': ', 1) for x in request_head[1:])
-
-        # headline has form of "METHOD URI HTTP/1.0"
+        # headline has form of "GET URI HTTP/1.0"
         request_method, request_uri, request_proto = request_headline.split(' ', 3)
 
         print("filename", request_uri)
@@ -165,7 +155,6 @@ def run():
         connectionSocket.send('\n'.encode())  # to separate headers from body
         connectionSocket.send(response_body.encode())
 
-        # print(response_body)
         # Close connection to client (but not welcoming socket)
         connectionSocket.close()
 
