@@ -15,6 +15,13 @@ def fetch_file(filename):
     print("client requested filename", filename)
 
     try:
+        #look for unsafe characters, status code 400
+        if "{" in filename or "}" in filename or"["in filename or"]"in filename or "%" in filename or "|" in filename or "^" in filename or "`"  in filename or "~" in filename or "//" in filename:
+            status_code = '400'
+            response_html = ['<html><body><h1>Error 400</h1>', '<p>Bad Request</p>', '</body></html>']
+            response_body = ''.join(response_html)
+            return response_body, status_code
+        
         cache_f = open(f'cache_files/{filename}', 'r')
         cache_file_lines = cache_f.readlines()
         cache_f.close()
