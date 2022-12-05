@@ -2,6 +2,8 @@
 import shutil
 from socket import *
 
+CACHE_SEPARATOR = "<CACHE_SEPARATOR>"
+
 response_status_text = {
     '200': 'OK',
     '304': 'Not Modified',
@@ -9,6 +11,28 @@ response_status_text = {
     '404': 'Not Found',
     '408': 'Request Timed Out'
 }
+
+def send_file_to_proxy(filename, client_socket):
+
+    try:
+        with open(f'server_files/{filename}', "rb") as f:
+            while True:
+                # read the bytes from the file
+                bytes_read = f.read(1024)
+                if not bytes_read:
+                    # file transmitting is done
+                    break
+                # we use sendall to assure transimission in
+                # busy networks
+                client_socket.sendall(bytes_read)
+
+        response_body = ''
+        status_code = '200'
+    except:
+        response_html = ['<html><body><h1>Error 404</h1>', '<p>Not Found</p>', '</body></html>']
+        response_body = ''.join(response_html)
+        status_code = '404'
+    return response_body, status_code
 
 
 def fetch_file(filename):
@@ -136,6 +160,7 @@ def run():
         print("\n----data", data, "\n------------------------------\n")
 
         request = normalize_line_endings(data)
+        print("----request", request) # TODO this dies here when passing info from proxy
         request_head, request_body = request.split('\n\n', 1)
 
         print("\n----request_head:", request_head, "\n------------------------------\n")
@@ -150,29 +175,34 @@ def run():
         # headline has form of "METHOD URI HTTP/1.0"
         request_method, request_uri, request_proto = request_headline.split(' ', 3)
 
-        print("filename", request_uri)
+        if len(request_uri) > 15 and request_uri[:15] == '/proxy-request-':
+            filename = request_uri[15:]
+            print(f"proxy server is requesting filename {filename}")
+            response_body, response_status = send_file_to_proxy(filename, connectionSocket)
 
-        response_body, response_status = fetch_file(request_uri[1:])
+        else:
+            print("this request is from web browser to server")
+            print("filename", request_uri)
+            response_body, response_status = fetch_file(request_uri[1:])
 
-        # build response status
-        response_status_line = f'HTTP/1.1 {response_status} {response_status_text[response_status]}'
+            # build response status
+            response_status_line = f'HTTP/1.1 {response_status} {response_status_text[response_status]}'
 
-        # build response headers
-        response_headers = {
-            'Content-Type': 'text/html; encoding=utf8',
-            'Content-Length': len(response_body),
-            'Connection': 'close',
-        }
-        response_headers_raw = ''.join('%s: %s\n' % (k, v) for k, v in \
-                                       iter(response_headers.items()))
+            # build response headers
+            response_headers = {
+                'Content-Type': 'text/html; encoding=utf8',
+                'Content-Length': len(response_body),
+                'Connection': 'close',
+            }
+            response_headers_raw = ''.join('%s: %s\n' % (k, v) for k, v in \
+                                           iter(response_headers.items()))
 
-        # sending full response
-        connectionSocket.send(response_status_line.encode())
-        connectionSocket.send(response_headers_raw.encode())
-        connectionSocket.send('\n'.encode())  # to separate headers from body
-        connectionSocket.send(response_body.encode())
+            # sending full response
+            connectionSocket.send(response_status_line.encode())
+            connectionSocket.send(response_headers_raw.encode())
+            connectionSocket.send('\n'.encode())  # to separate headers from body
+            connectionSocket.send(response_body.encode())
 
-        print(response_body)
         # Close connection to client (but not welcoming socket)
         connectionSocket.close()
 
