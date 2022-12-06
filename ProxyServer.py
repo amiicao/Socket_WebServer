@@ -1,4 +1,5 @@
 # Include Python's Socket Library
+import time
 from socket import *
 
 # Specify Proxy Server Address
@@ -86,15 +87,19 @@ def fetch_file_from_server(filename):
 
     # send name of file to request from Main Server
     clientSocket.send(f'GET /proxy-request-{filename} HTTP/1.1\n\n'.encode())
+    try:
+        with open(f'proxy_cache/{filename}', "wb") as f:
+            while True:
+                bytes_read = clientSocket.recv(1024)
+                if not bytes_read:
+                    break
+                f.write(bytes_read)
+                clientSocket.close()
+        return True
+    except:
+        clientSocket.close()
+        return False
 
-    with open(f'proxy_cache/{filename}', "wb") as f:
-        while True:
-            bytes_read = clientSocket.recv(1024)
-            if not bytes_read:
-                break
-            f.write(bytes_read)
-
-    clientSocket.close()
 
 
 def run():
@@ -115,46 +120,80 @@ def run():
         # New socket created on return
         connectionSocket, client_addr = ProxySocket.accept()
 
-        # Read from socket (but not address as in UDP)
-        data = connectionSocket.recv(1024).decode()
+        # implement a timer
+        start_time = time.time()
+        # sleep function used to artificially create the request timeout
+        # time.sleep(7)
+        time_recv = time.time() - start_time
+        if (time_recv < 5):
 
-        print("\n----data", data, "\n------------------------------\n")
+            # Read from socket (but not address as in UDP)
+            data = connectionSocket.recv(1024).decode()
 
-        request = normalize_line_endings(data)
-        request_head, request_body = request.split('\n\n', 1)
+            print("\n----data", data, "\n------------------------------\n")
 
-        print("\n----request_head:", request_head, "\n------------------------------\n")
-        # print("\n----request_body", request_body, "\n------------------------------\n")
+            request = normalize_line_endings(data)
+            request_head, request_body = request.split('\n\n', 1)
 
-        # first line is request headline, and others are headers
-        request_head = request_head.splitlines()
-        request_headline = request_head[0]
+            print("\n----request_head:", request_head, "\n------------------------------\n")
+            # print("\n----request_body", request_body, "\n------------------------------\n")
 
-        # headline has form of "GET URI HTTP/1.0"
-        request_method, request_uri, request_proto = request_headline.split(' ', 3)
+            # first line is request headline, and others are headers
+            request_head = request_head.splitlines()
+            request_headline = request_head[0]
 
-        print("filename", request_uri)
+            # headline has form of "GET URI HTTP/1.0"
+            request_method, request_uri, request_proto = request_headline.split(' ', 3)
 
-        response_body, response_status = fetch_file(request_uri[1:])
+            print("filename", request_uri)
 
-        # build response status
-        response_status_line = f'HTTP/1.1 {response_status} {response_status_text[response_status]}'
+            response_body, response_status = fetch_file(request_uri[1:])
 
-        # build response headers
-        response_headers = {
-            'Content-Type': 'text/html; encoding=utf8',
-            'Content-Length': len(response_body),
-            'Connection': 'close',
-        }
-        response_headers_raw = ''.join('%s: %s\n' % (k, v) for k, v in \
-                                       iter(response_headers.items()))
+            # build response status
+            response_status_line = f'HTTP/1.1 {response_status} {response_status_text[response_status]}'
 
-        # sending full response
-        connectionSocket.send(response_status_line.encode())
-        connectionSocket.send(response_headers_raw.encode())
-        connectionSocket.send('\n'.encode())  # to separate headers from body
-        connectionSocket.send(response_body.encode())
+            # build response headers
+            response_headers = {
+                'Content-Type': 'text/html; encoding=utf8',
+                'Content-Length': len(response_body),
+                'Connection': 'close',
+            }
+            response_headers_raw = ''.join('%s: %s\n' % (k, v) for k, v in \
+                                           iter(response_headers.items()))
 
+            # sending full response
+            connectionSocket.send(response_status_line.encode())
+            connectionSocket.send(response_headers_raw.encode())
+            connectionSocket.send('\n'.encode())  # to separate headers from body
+            connectionSocket.send(response_body.encode())
+
+            # Close connection to client (but not welcoming socket)
+            connectionSocket.close()
+
+        else:  # timeout; status code 408
+            response_status = '408'
+            response_html = ['<html><body><h1>Error 408</h1>', '<p>Request Timeout</p>', '</body></html>']
+            response_body = ''.join(response_html)
+
+            # build response status
+            response_status_line = f'HTTP/1.1 {response_status} {response_status_text[response_status]}'
+
+            # build response headers
+            response_headers = {
+                'Content-Type': 'text/html; encoding=utf8',
+                'Content-Length': len(response_body),
+                'Connection': 'close',
+            }
+            response_headers_raw = ''.join('%s: %s\n' % (k, v) for k, v in \
+                                           iter(response_headers.items()))
+
+            # sending full response
+            connectionSocket.send(response_status_line.encode())
+            connectionSocket.send(response_headers_raw.encode())
+            connectionSocket.send('\n'.encode())  # to separate headers from body
+            connectionSocket.send(response_body.encode())
+
+        print(response_body)
         # Close connection to client (but not welcoming socket)
         connectionSocket.close()
 
